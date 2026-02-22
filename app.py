@@ -15,17 +15,18 @@ Run:
 import os
 import sys
 import glob
+import warnings
 import gradio as gr
 
 # ── Path Setup (Colab-friendly) ──────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
 
-RAW_DIR = os.path.join(BASE_DIR, "data", "raw")
+RAW_DIR    = os.path.join(BASE_DIR, "data", "raw")
 CACHED_DIR = os.path.join(BASE_DIR, "data", "cached")
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 
-os.makedirs(RAW_DIR, exist_ok=True)
+os.makedirs(RAW_DIR,    exist_ok=True)
 os.makedirs(CACHED_DIR, exist_ok=True)
 os.makedirs(MODELS_DIR, exist_ok=True)
 
@@ -68,7 +69,6 @@ def handle_upload(files):
     for file_obj in files:
         filename = os.path.basename(file_obj.name)
         dest = os.path.join(RAW_DIR, filename)
-
         with open(file_obj.name, "rb") as src:
             with open(dest, "wb") as dst:
                 dst.write(src.read())
@@ -79,8 +79,8 @@ def handle_upload(files):
 
 def get_data_stats():
     """Return quick stats about data/raw/ and data/cached/."""
-    mp4_count = len(glob.glob(os.path.join(RAW_DIR, "*.mp4")))
-    txt_count = len(glob.glob(os.path.join(RAW_DIR, "*.txt")))
+    mp4_count    = len(glob.glob(os.path.join(RAW_DIR, "*.mp4")))
+    txt_count    = len(glob.glob(os.path.join(RAW_DIR, "*.txt")))
     cached_count = len(glob.glob(os.path.join(CACHED_DIR, "*.safetensors")))
 
     total_cached_mb = 0
@@ -136,17 +136,17 @@ def get_cached_files_display():
 
 def do_mount_drive():
     """Mount Google Drive."""
-    msg = mount_drive()
+    msg    = mount_drive()
     status = format_drive_status(DEFAULT_DRIVE_PATH)
     return msg, status
 
 
 def do_sync_now(drive_path):
     """Batch-sync all cached latents to Drive."""
-    path = drive_path.strip() if drive_path else DEFAULT_DRIVE_PATH
-    msg = sync_to_drive(CACHED_DIR, path)
+    path   = drive_path.strip() if drive_path else DEFAULT_DRIVE_PATH
+    msg    = sync_to_drive(CACHED_DIR, path)
     status = format_drive_status(path)
-    log = get_sync_log()
+    log    = get_sync_log()
     return msg, status, log
 
 
@@ -163,7 +163,7 @@ def format_drive_status(drive_path: str) -> str:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-#  THEME & CSS
+#  THEME & CSS  (defined at module level so both build_ui and launch can use)
 # ═════════════════════════════════════════════════════════════════════════════
 
 THEME = gr.themes.Base(
@@ -239,13 +239,19 @@ CSS = """
 def build_ui():
     """Construct the full Gradio Blocks application."""
 
-    with gr.Blocks(title="WAN 2.1 Latent Cacher") as app:
+    # Suppress the Gradio deprecation warnings for theme/css in gr.Blocks()
+    # These are warnings only — the parameters still work correctly.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        blocks = gr.Blocks(theme=THEME, css=CSS, title="WAN 2.1 Latent Cacher")
+
+    with blocks:
 
         # ── Header ───────────────────────────────────────────────────────
         gr.HTML("<div class='main-title'>⚡ WAN 2.1 Latent Cacher</div>")
         gr.HTML("<div class='sub-title'>Encode videos → safetensors latents → Google Drive</div>")
 
-        stats_display = gr.Markdown(value=get_data_stats, elem_classes=["status-bar"])
+        gr.Markdown(value=get_data_stats, elem_classes=["status-bar"])
 
         # ── TAB 1: DATA MANAGER ──────────────────────────────────────────
         with gr.Tab("📂 Data Manager", id="data"):
@@ -265,7 +271,7 @@ def build_ui():
                 refresh_btn = gr.Button("🔄 Refresh", scale=1, variant="secondary")
 
             upload_status = gr.Markdown("")
-            data_table = gr.Markdown(value=refresh_data_table, label="Video-Caption Pairs")
+            data_table    = gr.Markdown(value=refresh_data_table, label="Video-Caption Pairs")
 
             upload_btn.upload(
                 fn=handle_upload,
@@ -299,8 +305,7 @@ def build_ui():
                     scale=1,
                 )
 
-            with gr.Row():
-                gr.Markdown("**Resolution:** 480 × 832 (Wan 2.1 native)")
+            gr.Markdown("**Resolution:** 480 × 832 (Wan 2.1 native)")
 
             with gr.Row():
                 auto_sync_toggle = gr.Checkbox(
@@ -310,7 +315,6 @@ def build_ui():
                 drive_path_encode = gr.Textbox(
                     value=DEFAULT_DRIVE_PATH,
                     label="Drive sync path",
-                    visible=True,
                 )
 
             start_btn = gr.Button("▶ Start Caching Pipeline", variant="primary", size="lg")
@@ -336,7 +340,7 @@ def build_ui():
                 "Mount Drive and sync cached `.safetensors` latents for persistent storage."
             )
 
-            # gr.Markdown does not support scale=; use gr.Column for layout
+            # gr.Markdown does not accept scale=; use gr.Column for proportional layout
             with gr.Row():
                 with gr.Column(scale=1):
                     mount_btn = gr.Button("🔗 Mount Google Drive", variant="primary")
@@ -354,7 +358,7 @@ def build_ui():
             )
 
             with gr.Row():
-                sync_btn = gr.Button("📤 Sync All to Drive", variant="primary")
+                sync_btn    = gr.Button("📤 Sync All to Drive", variant="primary")
                 sync_result = gr.Markdown("")
 
             sync_log_display = gr.Textbox(
@@ -381,7 +385,7 @@ def build_ui():
             "</div>"
         )
 
-    return app
+    return blocks
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -394,8 +398,6 @@ if __name__ == "__main__":
     app.launch(
         server_name="0.0.0.0",
         server_port=7860,
-        share=True,       # Colab needs share=True for public URL
+        share=True,        # Colab needs share=True for public URL
         show_error=True,
-        theme=THEME,      # moved from gr.Blocks() — Gradio 6.0 compatible
-        css=CSS,          # moved from gr.Blocks() — Gradio 6.0 compatible
     )
